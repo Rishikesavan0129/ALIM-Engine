@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alim"
+version = "0.1.0"
+description = "Deterministic datasheet parameter extraction engine (research prototype)"
+requires-python = ">=3.10"
+dependencies = [
+    "pdfplumber==0.11.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1"]
+
+[tool.setuptools.packages.find]
+include = ["alim*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["alim/tests"]

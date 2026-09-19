@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Fixture PDFs -- third-party manufacturer copyrighted documents.
+# Fetched at test-setup time by fetch_fixtures.py; never commit these.
+alim/tests/fixtures/*.pdf
+alim/tests/fixtures/*.PDF
+!alim/tests/fixtures/.gitkeep
+
+# OS/editor cruft
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Benchmark/scratch output
+*.log
