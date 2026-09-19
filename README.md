@@ -132,3 +132,7 @@ Why not "beta" or "production-ready":
 
 See `LIMITATIONS.md` for the full, itemized list against every section of the original task
 spec, including what was explicitly out of scope for this session and why.
+
+## License
+
+Apache License 2.0. See `LICENSE`. Copyright 2026 Rishikesavan a.k.a Youness Yunair.
