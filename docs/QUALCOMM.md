@@ -110,7 +110,48 @@ Qualcomm AI Hub account/API token \u2014 see the notebook's \u00a78, not run in 
   `AutoModelForImageTextToText` doesn't recognize this architecture in your installed
   `transformers` version, upgrade or check the model card for the current class name.
 
-## 6. Reproduction
+## 6. Real-datasheet corpus: 22 documents, structural-only baseline
+
+Extended the fixture corpus from 5 to **22 real datasheets** across the device categories the
+challenge spec named: sensors (DS18B20, LM35, MQ-7, MLX90614, BMP180, VL53L0X), an RF
+transceiver (nRF24L01+), regulators (LM317, LM7805), op-amps (LM358, LM741, TL082), a
+comparator (LM339), a timer (NE555), an ADC (CA3306), a DAC (MCP4725), logic ICs (74HC595,
+CD4017), an MCU (STM32F103C8), memory (AT24C02A, AT45DB041B), and a power-management IC
+(KA34063). Source: two public GitHub-hosted collections (`arduinolearning/Datasheets`,
+`Vitorbnc/electronics-datasheets`), fetched at test-setup time via `fetch_fixtures.py`, never
+committed as binaries. One deliberate omission: the full ATmega48/88/168/328 family datasheet
+(32MB, 600+ pages) was dropped as disproportionate for a test fixture.
+
+**Structural-only baseline** (`alim/benchmarks/corpus_baseline.py`, no VLM, one representative
+query per document, run and recorded on this date):
+
+| Status | Count |
+|---|---|
+| VERIFIED | 1 |
+| FOUND | 3 |
+| AMBIGUOUS_MISSING_CONDITION | 1 |
+| NOT_FOUND | 7 |
+| SCHEMA_UNKNOWN | 10 |
+
+Read plainly: only 4 of 22 real documents resolve with a confident answer from structure
+alone. 10 come back `SCHEMA_UNKNOWN` -- a table-shaped grid was found but its schema wasn't
+recognized (device-variant columns, merged headers, or shapes the classifier hasn't seen) --
+**these are exactly the documents where the VLM fallback is supposed to help**, and the
+notebook's \u00a710 batch cell runs the identical query set through a configured VLM provider so
+you can measure how many of those 10 actually resolve. 7 come back `NOT_FOUND`, which is not
+automatically a VLM problem -- structural candidates may well exist on these pages but not
+match the exact query wording used (e.g. a chip's supply pin might only be labeled "VCC" with
+no "voltage" token nearby); this needs per-document investigation, not assumed to be either a
+parsing failure or a vocabulary success. The one `AMBIGUOUS_MISSING_CONDITION` (LM7805) is a
+genuinely interesting real find: multiple input-voltage values with no distinguishing
+condition text -- worth checking by hand against the real datasheet before assuming it's a bug
+or a real ambiguity in the source document.
+
+**This baseline was measured, not estimated** -- every row is a real `extract()` call against
+a real PDF in this session. It has not yet been run with a real VLM anywhere; that's what the
+notebook's \u00a710 cell is for.
+
+## 7. Reproduction
 
 ```bash
 # Integration-layer tests (fixture backend, no live model, works anywhere):
