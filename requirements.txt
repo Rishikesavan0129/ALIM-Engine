@@ -1,2 +1,3 @@
 pdfplumber==0.11.9
 pytest==9.1.1
+pymupdf
