@@ -35,7 +35,7 @@ def _candidate_to_dict(c):
 
 
 def extract(pdf_path: str, query: str, vlm_provider=None, trace: bool = False,
-            include_unresolved: bool = False) -> dict:
+            include_unresolved: bool = False, include_all_evidence: bool = False) -> dict:
     """include_unresolved: on a real, complex datasheet the grid detector
     flags many non-data regions (figures, pin diagrams, revision-history
     tables) as "unsupported tables" -- on a 78-page document this can be
@@ -121,6 +121,20 @@ def extract(pdf_path: str, query: str, vlm_provider=None, trace: bool = False,
 
     if vlm_calls:
         result["vlm_calls"] = vlm_calls  # always visible, not gated -- this is cost/latency evidence, not noise
+
+    if include_all_evidence:
+        # Everything the engine actually saw and considered, whether or not
+        # it matched the query -- so a failed/partial result is never a dead
+        # end. Every candidate that reached extract_parameter ends up in
+        # either decision.accepted or decision.rejected; together they are
+        # the complete set considered for this query.
+        evidence = [dict(_candidate_to_dict(c), outcome="accepted") for c in decision.accepted]
+        for c, reason in decision.rejected:
+            entry = _candidate_to_dict(c)
+            entry["outcome"] = "rejected"
+            entry["reason"] = reason
+            evidence.append(entry)
+        result["all_evidence"] = evidence
 
     if trace:
         result["_trace"] = decision.trace.steps
