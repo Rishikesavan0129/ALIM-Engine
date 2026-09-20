@@ -11,18 +11,34 @@ PDF
                                   the latter with an explicit confidence tier)
  -> candidates/build.py         (IR Table -> Candidate list: forward-fill, subscript-join,
                                   multiline-cell zipping, leftmost-column parameter fallback)
- -> vlm/interface.py            (documented contract for a perception provider; NOT wired to
-                                  a live model in this environment -- see Limitations)
+ -> vlm/interface.py            (VLMPerceptionProvider contract; a real implementation lives in
+                                  integrations/qualcomm/, no live model wired in this environment)
  -> decision/core.py            (the frozen-then-extended decision core: tri-state negative
                                   selection with confidence tiers, dedup, malformed-value
                                   rejection, AMBIGUOUS_MISSING_CONDITION, explainable trace)
- -> api/extract.py              (top-level extract(pdf_path, query) -> structured result dict)
+ -> api/extract.py              (top-level extract(pdf_path, query, vlm_provider=None) ->
+                                  structured result dict; two-phase orchestration -- decides on
+                                  structural evidence first, escalates to a VLM provider only
+                                  for pages with an unresolved table schema, and only if the
+                                  structural pass didn't already produce a confident answer)
+ -> integrations/qualcomm/      (QualcommVLMProvider: evidence schema, prompt, JSON-to-Candidate
+                                  parser -- see docs/QUALCOMM.md and examples/qualcomm_alim_colab.ipynb)
 ```
 
 This matches the required principle: **VLM perceives, deterministic engine decides.** The
-decision core was changed exactly twice in this session, both times because a reproducible
-test demonstrated a real defect (see CHANGELOG below) -- never to make a test pass without
-understanding why it was failing.
+decision core itself has been changed only when a reproducible test demonstrated a real defect
+(see CHANGELOG below) -- never to make a test pass without understanding why it was failing.
+The Qualcomm integration adds a real `VLMPerceptionProvider` implementation and wires the
+previously-unused `vlm_provider` orchestration path in `api.extract()`, but does not touch
+`decision/core.py` at all.
+
+**Repository structure note:** the task spec suggesting this integration proposed a
+`src/alim/` layout; this repo keeps the existing `alim/` top-level layout instead, since
+renaming it would touch every import and the CI config for no functional benefit, and risk
+breaking the 15 previously-passing tests for a cosmetic change. The new pieces
+(`alim/integrations/qualcomm/`, `examples/qualcomm_alim_colab.ipynb`,
+`alim/tests/test_qualcomm_integration.py`, `docs/QUALCOMM.md`) follow the spec's intent without
+the rename.
 
 ## What's actually implemented
 
@@ -104,6 +120,29 @@ understanding why it was failing.
    requirement that the normal successful case stay simple. Fix: report a count by default,
    full detail only on request or on an actual refusal.
 
+8. **VLM fallback orchestration was never actually wired.** `api.extract()` accepted a
+   `vlm_provider` parameter and never called it -- found while preparing the Qualcomm
+   integration, which is exactly the code path this parameter exists for. Fixed with a
+   two-phase design: decide on structural evidence first; only escalate to the VLM, and only
+   for the specific pages with an unresolved table, if the structural pass didn't already
+   produce a confident answer. The first version of the fix still called the VLM on a page
+   that had already resolved successfully, purely because that same page also contained an
+   unrelated misdetected "table" (a figure) -- caught by
+   `test_vlm_only_called_for_pages_with_unresolved_tables_not_every_page` and fixed by
+   deciding on structural evidence before ever considering escalation. General because it's a
+   sequencing rule (decide first, escalate only on genuine insufficiency), not specific to any
+   one document.
+
+## Qualcomm AI LAB Build & Present Challenge integration
+
+See `docs/QUALCOMM.md` for the full record: model selection (Qwen3-VL-4B-Instruct, chosen over
+the originally-suggested Qwen2.5-VL-7B-Instruct after checking the current AI Hub catalog
+directly), the GenieX/QAIRT runtime path, real published on-device Snapdragon X Elite/X2 Elite
+benchmark numbers (cited, not reproduced by this project), and the honest Colab-vs-real-device
+distinction. Run `examples/qualcomm_alim_colab.ipynb` (works immediately in `MOCK_MODE = True`
+with no GPU; set `MOCK_MODE = False` for a real model run on Colab's GPU). Integration tests:
+`pytest alim/tests/test_qualcomm_integration.py alim/tests/test_vlm_fallback_orchestration.py -v`.
+
 ## Honest classification
 
 **Research prototype with a validated decision core and a working structural pipeline for
@@ -113,10 +152,13 @@ Why not "beta" or "production-ready":
 - The real-datasheet corpus is 5 PDFs across 5 manufacturers, not the 15-20+ across sensors/
   regulators/op-amps/ADCs/MCUs/transceivers/memory/logic/power-management the spec calls for.
   Every number in this repo is honest for n=5, not representative of a larger population.
-- No live VLM is wired in. The interface and a manual/fixture-based stand-in exist and are
-  tested; a real multimodal call path does not exist in this environment (no network route to
-  a model endpoint from this sandbox). Any table this pipeline refuses today stays refused --
-  it does not silently degrade, but it also doesn't get resolved.
+- No live VLM call has been made anywhere in this project. A real `VLMPerceptionProvider`
+  (`QualcommVLMProvider`) and the orchestration to actually invoke it (`api.extract()`'s
+  two-phase structural-then-VLM logic) both exist and are tested end-to-end -- but only against
+  a fixture backend returning hand-written JSON, since this environment has no network route to
+  huggingface.co or any model endpoint. The first genuine model call happens when you run
+  `examples/qualcomm_alim_colab.ipynb` with `MOCK_MODE = False`. Until then, any table the
+  structural pipeline refuses stays refused when no provider is configured.
 - 8 of the 14 named table schemas are not distinguished; they currently fall into the two
   generic refusal buckets rather than being correctly identified and extracted.
 - No caching across repeated queries against the same document -- every `extract()` call
@@ -132,3 +174,7 @@ Why not "beta" or "production-ready":
 
 See `LIMITATIONS.md` for the full, itemized list against every section of the original task
 spec, including what was explicitly out of scope for this session and why.
+
+## License
+
+Apache License 2.0. See `LICENSE`. Copyright 2026 Rishikesavan a.k.a Youness Yunair.
