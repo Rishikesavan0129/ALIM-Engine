@@ -78,6 +78,14 @@ rationale. No hardcoded page numbers or parameter locations exist in production 
 files do reference specific real page numbers, which is appropriate for regression tests, not
 production logic).
 
+**Qualcomm integration (see `docs/QUALCOMM.md` for full detail).** A real
+`VLMPerceptionProvider` implementation and the `api.extract()` orchestration to invoke it both
+exist and are tested, but only against a fixture backend -- no live Qwen3-VL-4B-Instruct call
+has been made anywhere in this project (no network route to a model endpoint in this
+environment). No on-device Snapdragon latency/memory numbers were measured; the numbers cited
+in `docs/QUALCOMM.md` are Qualcomm's own published figures, not reproduced here. No accuracy
+comparison between Qwen3-VL-4B-Instruct and Qwen2.5-VL-7B-Instruct on datasheet tables exists.
+
 **What was explicitly NOT attempted this session, and why:** a live VLM call path (no network
 route available), a 15-20 document labeled corpus with precision/recall metrics (requires
 ground-truth labeling effort beyond one session), the remaining 8 schema shapes (each would
