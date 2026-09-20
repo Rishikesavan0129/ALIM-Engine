@@ -143,6 +143,16 @@ distinction. Run `examples/qualcomm_alim_colab.ipynb` (works immediately in `MOC
 with no GPU; set `MOCK_MODE = False` for a real model run on Colab's GPU). Integration tests:
 `pytest alim/tests/test_qualcomm_integration.py alim/tests/test_vlm_fallback_orchestration.py -v`.
 
+**Real-datasheet corpus extended to 22 documents** across sensors, an RF transceiver,
+regulators, op-amps, a comparator, a timer, an ADC, a DAC, logic ICs, an MCU, memory, and a
+power-management IC (`fetch_fixtures.py`). A structural-only baseline (no VLM,
+`alim/benchmarks/corpus_baseline.py`) was measured across all 22: only 4 resolve with a
+confident structural answer, 10 come back `SCHEMA_UNKNOWN` (the actual target set for VLM
+fallback testing), 7 `NOT_FOUND`, 1 `AMBIGUOUS_MISSING_CONDITION`. Full numbers and reading in
+`docs/QUALCOMM.md` §6. The notebook's §10 batch cell runs the identical query set through a
+configured VLM provider so you can measure how many of the 10 `SCHEMA_UNKNOWN` cases a real
+model resolves.
+
 ## Honest classification
 
 **Research prototype with a validated decision core and a working structural pipeline for
