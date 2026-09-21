@@ -18,6 +18,7 @@ import time
 
 from alim.ingestion.pdf_extract import extract_document
 from alim.candidates.build import build_candidates_from_table
+from alim.candidates.page_ranking import rank_pages_by_relevance
 from alim.schema.classify import classify_table_shape
 from alim.decision.core import extract_parameter, STATUS_FOUND
 
@@ -35,7 +36,8 @@ def _candidate_to_dict(c):
 
 
 def extract(pdf_path: str, query: str, vlm_provider=None, trace: bool = False,
-            include_unresolved: bool = False, include_all_evidence: bool = False) -> dict:
+            include_unresolved: bool = False, include_all_evidence: bool = False,
+            max_vlm_pages: int = 5) -> dict:
     """include_unresolved: on a real, complex datasheet the grid detector
     flags many non-data regions (figures, pin diagrams, revision-history
     tables) as "unsupported tables" -- on a 78-page document this can be
@@ -75,8 +77,16 @@ def extract(pdf_path: str, query: str, vlm_provider=None, trace: bool = False,
     vlm_calls = []
     decision = structural_decision
     if structural_decision.status != STATUS_FOUND and vlm_provider is not None and unsupported_pages:
+        # Rank candidate pages by cheap text-overlap relevance (plus a
+        # table-of-contents boost if one was found) and only call the VLM
+        # on the top few -- calling it on EVERY unresolved page was found,
+        # by real measurement, to mean up to 77 of 78 pages on one real
+        # document. That defeats "minimum VLM computation necessary" and
+        # would be needlessly slow/expensive at any real scale.
+        ranked_pages = rank_pages_by_relevance(doc, query, unsupported_pages)
+        target_pages = ranked_pages[:max_vlm_pages]
         vlm_candidates = []
-        for page_number in sorted(unsupported_pages):
+        for page_number in target_pages:
             t0 = time.time()
             try:
                 page_candidates = vlm_provider.perceive(pdf_path, page_number, query)
