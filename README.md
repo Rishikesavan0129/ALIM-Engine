@@ -133,6 +133,17 @@ the rename.
    sequencing rule (decide first, escalate only on genuine insufficiency), not specific to any
    one document.
 
+9. **VLM escalation called EVERY unresolved page, not just relevant ones.** Measured on the
+   real nRF24L01+ datasheet: 77 of 78 pages have at least one table-shaped region the schema
+   classifier doesn't recognize (mostly figures/diagrams misdetected as tables, not real spec
+   tables). Escalating to a VLM after a failed structural pass would have called it on up to 77
+   pages for one query -- directly against "minimum VLM computation necessary." Fixed with
+   `alim/candidates/page_ranking.py`: cheap text-overlap scoring (reusing the same
+   symbol/synonym vocabulary the decision core already has) plus a table-of-contents-page bonus
+   when one is detected, capped at `max_vlm_pages` (default 5). Verified this actually finds the
+   right page, not just fewer pages: for a real query the structural pass can't answer, the
+   ranked top-5 includes the real page containing that answer, out of 77 candidates.
+
 ## Qualcomm AI LAB Build & Present Challenge integration
 
 See `docs/QUALCOMM.md` for the full record: model selection (Qwen3-VL-4B-Instruct, chosen over
