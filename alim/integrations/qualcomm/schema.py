@@ -41,6 +41,13 @@ Rules:
 - If a field is not visible or not printed, use null. Never invent a value.
 - If a bound is expressed relative to another signal (e.g. "VDD - 0.3"), copy
   that text into min/max as printed -- do not compute a number.
+- If a value is printed as a plain two-sided range in one place (e.g.
+  "-0.5V to +18V", "-0.5 VDC to +18 VDC"), split it: the first number goes in
+  "min", the second in "max". Example: "-0.5 VDC to +18 VDC" becomes
+  min="-0.5", max="18", unit="VDC". Do this even if the min and max are not
+  in separate table columns -- a single printed range is still two values.
+- Only leave min/max/typ null when NO number for that field is printed
+  anywhere for this row, not when it needs to be split out of a range.
 - Return [] if no relevant parameter is visible on this page.
 - Do not decide which candidate is "correct" -- that is not your job.
 """
