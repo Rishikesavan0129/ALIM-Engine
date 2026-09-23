@@ -153,6 +153,36 @@ def test_uncertain_flag_downgrades_verified_to_unverified():
     assert cands[0].section_confidence == Confidence.UNVERIFIED.value
 
 
+def test_prompt_instructs_splitting_plain_text_ranges():
+    """Real finding: a model returned correct labels (section, parameter,
+    symbol) but null min/max/typ, with uncertain=false, for a real
+    Absolute Maximum Ratings row expressed as a plain '-0.5 VDC to +18 VDC'
+    range rather than separate Min/Max columns -- the prompt had a rule for
+    formula-relative bounds but none for this much more common plain-range
+    case, so the model likely didn't know which field to put a two-sided
+    range into and defaulted to null rather than guess. This just checks
+    the instruction is actually present, not that a live model follows it
+    (that requires the real model, not available in this environment)."""
+    from alim.integrations.qualcomm.schema import build_prompt
+    prompt = build_prompt("supply voltage")
+    assert "min=\"-0.5\", max=\"18\"" in prompt or "-0.5 VDC to +18 VDC" in prompt
+
+
+def test_correctly_split_range_evidence_reaches_a_decision():
+    """If the model DOES follow the new instruction and splits a plain
+    range into separate min/max, confirm that evidence flows all the way
+    through to a real accepted result -- not just that the prompt asks
+    for it."""
+    raw = """[{"section": "Recommended Operating Conditions", "table_caption": "Table 3. Operating conditions",
+               "parameter": "DC Supply Voltage", "symbol": "VDD", "condition": null,
+               "min": "3", "max": "15", "unit": "VDC", "uncertain": false}]"""
+    cands = parse_evidence_to_candidates(raw)
+    assert cands[0].min_val == "3" and cands[0].max_val == "15"
+    d = extract_parameter(cands, "supply voltage")
+    assert d.status == "FOUND"
+    assert d.accepted[0].min_val == "3"
+
+
 def test_provider_end_to_end_with_fixture_backend():
     """The full VLMPerceptionProvider contract, exercised with a fixture
     generate_fn instead of a real model call. Confirms the provider slots
