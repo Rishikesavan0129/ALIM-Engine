@@ -183,6 +183,41 @@ def test_correctly_split_range_evidence_reaches_a_decision():
     assert d.accepted[0].min_val == "3"
 
 
+def test_truncated_response_recovers_complete_leading_candidates():
+    """Real finding: a real Qwen3-VL-4B-Instruct response was cut off by
+    max_new_tokens partway through the 3rd of 3 candidates (verbose
+    repeated footnote text ate the token budget). The first version of
+    the parser dropped ALL 3 real candidates because the array never
+    closed -- including the 2 real, complete, useful ones. This is the
+    exact real truncated text that caused it, used verbatim."""
+    raw = '''[
+  {
+    "section": "Absolute Maximum Ratings (Note 1)",
+    "parameter": "DC Supply Voltage (VDD)",
+    "min": "-0.5",
+    "max": "18",
+    "unit": "VDC",
+    "footnote_text": "Note 1: text"
+  },
+  {
+    "section": "Absolute Maximum Ratings (Note 1)",
+    "parameter": "Input Voltage (VDD)",
+    "min": "-0.5",
+    "max": "18",
+    "unit": "VDC",
+    "footnote_text": "Note 1: text"
+  },
+  {
+    "section": "Absolute Maximum Ratings (Note 1)",
+    "parameter": "Storage Temperature (T'''
+    cands = parse_evidence_to_candidates(raw, default_page=3)
+    assert len(cands) == 2, f"expected the 2 complete leading candidates recovered, got {len(cands)}"
+    assert cands[0].min_val == "-0.5" and cands[0].max_val == "18"
+    assert cands[1].detected_parameter == "Input Voltage (VDD)"
+    # the incomplete 3rd object must not appear at all, not even partially
+    assert not any("Storage" in c.detected_parameter for c in cands)
+
+
 def test_provider_end_to_end_with_fixture_backend():
     """The full VLMPerceptionProvider contract, exercised with a fixture
     generate_fn instead of a real model call. Confirms the provider slots

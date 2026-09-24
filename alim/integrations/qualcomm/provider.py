@@ -23,9 +23,15 @@ GenerateFn = Callable[[object, str], str]
 
 def _extract_json_array(raw_text: str) -> list:
     """Models occasionally wrap JSON in prose or code fences despite
-    instructions not to. Try direct parse first, then fall back to
-    extracting the first [...] span. Returns [] (not a crash) on failure --
-    a VLM that returns garbage is perception noise, not a reason to raise."""
+    instructions not to. Try direct parse first, then a [...] span, then
+    recover a truncated array (real finding: a real Qwen3-VL-4B-Instruct
+    response was cut off mid-object by max_new_tokens, most of the way
+    through the 3rd of 3 candidates -- the first version of this function
+    would drop ALL 3 real, useful candidates just because generation
+    stopped mid-response on the last one. Salvaging the complete leading
+    objects is strictly better than discarding a truncated-but-mostly-good
+    response outright, and still returns [] rather than fabricating
+    anything for the incomplete tail object."""
     raw_text = raw_text.strip()
     try:
         return json.loads(raw_text)
@@ -37,6 +43,39 @@ def _extract_json_array(raw_text: str) -> list:
             return json.loads(match.group(0))
         except json.JSONDecodeError:
             pass
+    # Truncated-array recovery: find the array's opening bracket, then keep
+    # only complete top-level {...} objects up to the last one that closed
+    # cleanly before generation cut off.
+    start = raw_text.find("[")
+    if start != -1:
+        depth = 0
+        last_complete_end = None
+        in_string = False
+        escape = False
+        for i, ch in enumerate(raw_text[start:], start=start):
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    last_complete_end = i + 1
+        if last_complete_end is not None:
+            repaired = raw_text[start:last_complete_end] + "]"
+            try:
+                return json.loads(repaired)
+            except json.JSONDecodeError:
+                pass
     return []
 
 
